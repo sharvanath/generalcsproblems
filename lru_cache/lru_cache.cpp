@@ -2,6 +2,9 @@
 #include<iostream>
 #include<list>
 #include<map>
+#include<utility>
+#include<complex>
+#include<tuple>
 #include<cassert>
 
 using std::cout;
@@ -27,8 +30,8 @@ class LruCache : public Cache<K, V> {
   V* GetIfExists(K key) final;
 
  private:
-  std::map<K, V> hash_cache_;
   std::list<K> recency_list_;
+  std::map<K, std::pair<V, typename std::list<K>::iterator>> hash_cache_;
 };
 
 template<class K, class V>
@@ -39,21 +42,21 @@ void LruCache<K, V>::Add(K key, V value) {
     hash_cache_.erase(hash_cache_.find(pop_key));
   }
   recency_list_.push_back(key);
-  hash_cache_[key] = value;
+  hash_cache_[key].first = value;
+  hash_cache_[key].second = --recency_list_.end();
 }
 
 template<class K, class V>
 V* LruCache<K, V>::GetIfExists(K key) {
-  typename std::map<K, V>::iterator it = hash_cache_.find(key);
+  auto it = hash_cache_.find(key);
   if (it == hash_cache_.end()) {
     return NULL;
   } else {
-    typename std::list<V>::iterator findIter = std::find(
-      recency_list_.begin(), recency_list_.end(), key);
-    assert (findIter != recency_list_.end());
-    recency_list_.erase(findIter);
+    auto listIter = it->second.second;
+    recency_list_.erase(listIter);
     recency_list_.push_back(key);
-    return &(it->second);
+    it->second.second = --recency_list_.end();
+    return &(it->second.first);
   }
 }
 
@@ -70,6 +73,8 @@ int main() {
       return 1;
     }
   }
+
+  // Touch them in decreasing order
   for (int i = 2*n-1; i >= n; i--) {
     if (!x.GetIfExists(i)) {
       std::cout << "Key " << i << " does not exist"
@@ -77,16 +82,21 @@ int main() {
       return 1;
     }
   }
-  for (int i = 0; i < (n/2); i++) {
-    x.Add(i, 0);
-  }
 
-  for (int i = 0; i < (2*n); i++) {
-    int * ptr = x.GetIfExists(i);
-    if (ptr)
-      std::cout << "Got " << i << "\n";
-  }
+  // 2*n-1 was last touched hence should be evicted
+  x.Add(5*n, 1);
+  assert(!x.GetIfExists(2*n-1));
 
+  // Touch 2*n-2 and force eviction of someone
+  x.GetIfExists(2*n-2);
+  x.Add(5*n+1, 1);
+
+  // 2*n-2 should not be evicted since we will touch it
+  // instead 2*n-3 will be evicted
+  assert(x.GetIfExists(2*n-2));
+  assert(!x.GetIfExists(2*n-3));
+
+  std::cout << "No errors encountered in the test cases!" << std::endl;
   // check if access brings it to front
   return 0;
 }
